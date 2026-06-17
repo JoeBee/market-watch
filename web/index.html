@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="color-scheme" content="dark">
+  <title>Market Watch — 6–12 Month Factor Screener</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+  <link rel="alternate icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1>6–12 Month Factor Screener</h1>
+      <p class="version" id="app-version"></p>
+    </header>
+
+    <section class="guide">
+      <ul>
+        <li><strong>What this is:</strong> A ranked list of US stocks scored for a <strong>6–12 month</strong> holding window—not a price target or buy/sell signal.</li>
+        <li><strong>How ranking works:</strong> Each stock gets a <strong>Score</strong> from momentum (12‑month return skipping the last month, plus 6‑month return), value (earnings &amp; book yield), and quality (ROE, margins, lower debt).</li>
+        <li><strong>How to read the table:</strong> Rank <strong>1</strong> = strongest combined factor profile in your universe; Z‑columns show how far above/below average each stock is on that factor.</li>
+        <li><strong>Data:</strong> Prices from Yahoo/Stooq; fundamentals from Yahoo and SEC EDGAR. Use <strong>Refresh Data</strong> to download updates; <strong>Refresh</strong> to re-rank using data already on disk.</li>
+        <li><strong>Sectors:</strong> Click any <strong>Sector</strong> cell to open <em>Sector Leaders</em> (re-ranked vs sector peers only).</li>
+        <li><strong>Company detail:</strong> Click a <strong>Ticker</strong> or <strong>Company</strong> name for key metrics and a brief factor-based summary.</li>
+      </ul>
+    </section>
+
+    <section class="controls">
+      <label class="control">
+        <span>Universe</span>
+        <input type="number" id="universe-limit" min="20" max="503" value="100">
+        <span class="suffix">stocks</span>
+      </label>
+
+      <label class="control">
+        <span>Min cap</span>
+        <select id="min-cap">
+          <option value="2000000000" selected>$2B+</option>
+          <option value="500000000">$500M+</option>
+          <option value="0">Any</option>
+        </select>
+      </label>
+
+      <button type="button" id="btn-refresh-data" class="btn btn-primary" title="Download latest universe, prices, and fundamentals from the web">
+        Refresh Data
+      </button>
+      <button type="button" id="btn-refresh" class="btn" title="Re-rank stocks using cached data (applies current market-cap filter)">
+        Refresh
+      </button>
+    </section>
+
+    <p class="status" id="status" role="status">Ready. Use Refresh Data, then Refresh to rank stocks.</p>
+    <div class="progress hidden" id="progress" aria-hidden="true">
+      <div class="progress-bar"></div>
+    </div>
+
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="all" role="tab" aria-selected="true">All Stocks</button>
+      <button type="button" class="tab" data-tab="sector" role="tab" aria-selected="false">Sector Leaders</button>
+      <button type="button" class="tab" data-tab="company" role="tab" aria-selected="false">Company Detail</button>
+    </nav>
+
+    <section class="tab-panel active" id="panel-all" role="tabpanel">
+      <div class="table-wrap">
+        <table class="picks-table" id="table-all">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-sector" role="tabpanel" hidden>
+      <p class="panel-header" id="sector-header">Click a Sector in All Stocks to see leading names in that sector.</p>
+      <div class="table-wrap">
+        <table class="picks-table" id="table-sector">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="tab-panel" id="panel-company" role="tabpanel" hidden>
+      <div class="company-detail" id="company-detail">
+        <p class="panel-header">Click a Ticker or Company in any table to view details.</p>
+      </div>
+    </section>
+
+    <footer class="disclaimer">
+      Not investment advice. Rankings reflect historical factor scores only; past performance does not guarantee future results.
+    </footer>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
