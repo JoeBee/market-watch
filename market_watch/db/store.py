@@ -88,6 +88,16 @@ class Database:
                     name TEXT,
                     PRIMARY KEY (run_id, ticker)
                 );
+
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL,
+                    message TEXT,
+                    result TEXT,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    finished_at TEXT
+                );
                 """
             )
 
@@ -130,6 +140,13 @@ class Database:
                 "SELECT ticker FROM universe ORDER BY ticker"
             ).fetchall()
         return [r["ticker"] for r in rows]
+
+    def get_universe_rows(self) -> list[dict[str, Any]]:
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT ticker, name, sector, cik FROM universe ORDER BY ticker"
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def upsert_prices(self, df: pd.DataFrame, source: str) -> int:
         if df.empty:
@@ -212,3 +229,44 @@ class Database:
         with self._conn() as conn:
             row = conn.execute(query, params).fetchone()
         return row["finished_at"] if row else None
+
+    def save_job(
+        self,
+        job_id: str,
+        status: str,
+        message: str = "",
+        result: str | None = None,
+        error: str | None = None,
+        created_at: str | None = None,
+        finished_at: str | None = None,
+    ) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO jobs (id, status, message, result, error, created_at, finished_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status=excluded.status,
+                    message=excluded.message,
+                    result=excluded.result,
+                    error=excluded.error,
+                    finished_at=excluded.finished_at
+                """,
+                (
+                    job_id,
+                    status,
+                    message,
+                    result,
+                    error,
+                    created_at or now,
+                    finished_at,
+                ),
+            )
+
+    def load_job(self, job_id: str) -> dict[str, Any] | None:
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+        if not row:
+            return None
+        return dict(row)

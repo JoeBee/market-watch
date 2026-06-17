@@ -283,6 +283,10 @@ body {
   flex-shrink: 0;
 }
 
+.status.error {
+  color: var(--danger);
+}
+
 .progress {
   height: 4px;
   margin-bottom: 0.75rem;

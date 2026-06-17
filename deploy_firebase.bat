@@ -38,6 +38,8 @@ gcloud run deploy %SERVICE% ^
   --memory 2Gi ^
   --cpu 2 ^
   --timeout 3600 ^
+  --min-instances 1 ^
+  --max-instances 1 ^
   --project %PROJECT%
 if errorlevel 1 goto :fail
 

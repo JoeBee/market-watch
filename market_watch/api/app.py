@@ -1,23 +1,26 @@
 """FastAPI application serving Market Watch API and static web UI."""
 from __future__ import annotations
 
+import logging
 import math
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from market_watch.analysis.company_detail import build_company_detail
-from market_watch.config import APP_NAME, APP_VERSION, ROOT_DIR
+from market_watch.config import APP_NAME, APP_VERSION, DEFAULT_UNIVERSE_LIMIT, ROOT_DIR
 from market_watch.data.ingest import DataIngestor
 from market_watch.db.store import Database
 from market_watch.scoring.engine import ScoringEngine
 from market_watch.api.jobs import job_manager
+
+logger = logging.getLogger(__name__)
 
 WEB_DIR = ROOT_DIR / "web"
 
@@ -30,13 +33,35 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def disable_cache_for_ui(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if path == "/" or path.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
+
 db = Database()
 ingestor = DataIngestor(db)
 engine = ScoringEngine(db)
+job_manager.db = db
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    if isinstance(exc, HTTPException):
+        raise exc
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
 
 
 class RefreshRequest(BaseModel):
-    universe_limit: int = Field(default=100, ge=20, le=503)
+    universe_limit: int = Field(default=DEFAULT_UNIVERSE_LIMIT, ge=20, le=503)
+    use_sec: bool = Field(
+        default=False,
+        description="Enrich fundamentals from SEC EDGAR (slower; off by default).",
+    )
 
 
 class ScreenRequest(BaseModel):
@@ -77,9 +102,22 @@ def status() -> dict[str, Any]:
 @app.get("/api/picks")
 def get_picks() -> dict[str, Any]:
     df = db.load_latest_picks()
+    count = len(df)
+    universe_size = len(db.get_universe_tickers())
+    hint = None
+    if count == 0:
+        if universe_size == 0:
+            hint = "No market data yet. Click Refresh Data to download, then Refresh to rank stocks."
+        else:
+            hint = (
+                f"Data loaded ({universe_size} stocks) but not ranked yet. "
+                "Click Refresh to compute scores."
+            )
     return {
-        "count": len(df),
+        "count": count,
         "last_sync": db.last_sync_time(),
+        "universe_size": universe_size,
+        "hint": hint,
         "rows": _df_to_records(df),
     }
 
@@ -101,7 +139,11 @@ def run_screen(body: ScreenRequest) -> dict[str, Any]:
 @app.post("/api/refresh")
 def start_refresh(body: RefreshRequest) -> dict[str, str]:
     def task(progress) -> str:
-        ingestor.refresh_all(progress=progress, universe_limit=body.universe_limit)
+        ingestor.refresh_all(
+            progress=progress,
+            universe_limit=body.universe_limit,
+            use_sec=body.use_sec,
+        )
         return "Data refresh complete."
 
     job_id = job_manager.submit(task, label="data refresh")

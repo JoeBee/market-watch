@@ -1,11 +1,13 @@
-"""Fundamental data via Yahoo Finance (batch) with optional SEC enrichment."""
+"""Fundamental data via Yahoo Finance (parallel) with optional SEC enrichment."""
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable
 
 import yfinance as yf
 
+from market_watch.config import FUNDAMENTALS_MAX_WORKERS, USE_SEC_ENRICHMENT
 from market_watch.data.sec import enrich_with_sec
 
 logger = logging.getLogger(__name__)
@@ -54,20 +56,37 @@ def fetch_yfinance_fundamentals(ticker: str) -> dict[str, Any]:
 
 def fetch_fundamentals_batch(
     tickers: list[str],
-    cik_map: dict[str, str],
-    use_sec: bool = True,
+    cik_map: dict[str, str] | None = None,
+    use_sec: bool | None = None,
     progress: Callable[[str], None] | None = None,
-    sec_every_n: int = 5,
+    max_workers: int | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Fetch fundamentals; SEC enrichment on a subset to respect rate limits."""
-    results: dict[str, dict[str, Any]] = {}
+    """Fetch fundamentals in parallel; SEC enrichment is off by default (slow)."""
+    if not tickers:
+        return {}
+
+    use_sec = USE_SEC_ENRICHMENT if use_sec is None else use_sec
+    workers = max_workers or FUNDAMENTALS_MAX_WORKERS
+    cik_map = cik_map or {}
     total = len(tickers)
-    for i, ticker in enumerate(tickers):
-        if progress and i % 10 == 0:
-            progress(f"Fundamentals {i + 1}/{total}: {ticker}…")
+    results: dict[str, dict[str, Any]] = {}
+    completed = 0
+
+    def fetch_one(ticker: str) -> tuple[str, dict[str, Any]]:
         data = fetch_yfinance_fundamentals(ticker)
-        cik = cik_map.get(ticker.replace("-", "")) or cik_map.get(ticker)
-        if use_sec and cik and (i % sec_every_n == 0):
-            data = enrich_with_sec(ticker, cik, data)
-        results[ticker.upper()] = data
+        if use_sec:
+            cik = cik_map.get(ticker.replace("-", "")) or cik_map.get(ticker)
+            if cik:
+                data = enrich_with_sec(ticker, cik, data)
+        return ticker.upper(), data
+
+    with ThreadPoolExecutor(max_workers=min(workers, total)) as executor:
+        futures = {executor.submit(fetch_one, t): t for t in tickers}
+        for future in as_completed(futures):
+            ticker, data = future.result()
+            results[ticker] = data
+            completed += 1
+            if progress and (completed == 1 or completed % 10 == 0 or completed == total):
+                progress(f"Fundamentals {completed}/{total}: {ticker}…")
+
     return results

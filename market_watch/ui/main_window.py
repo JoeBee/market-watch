@@ -182,7 +182,7 @@ class MainWindow(QMainWindow):
         controls = QHBoxLayout()
         self.universe_spin = QSpinBox()
         self.universe_spin.setRange(20, 503)
-        self.universe_spin.setValue(100)
+        self.universe_spin.setValue(50)
         self.universe_spin.setPrefix("Universe: ")
         self.universe_spin.setSuffix(" stocks")
         controls.addWidget(self.universe_spin)

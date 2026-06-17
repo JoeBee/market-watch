@@ -57,8 +57,15 @@
     els.progress.classList.toggle("hidden", !value);
   }
 
-  function setStatus(msg) {
+  function setStatus(msg, isError) {
     els.status.textContent = msg;
+    els.status.classList.toggle("error", Boolean(isError));
+  }
+
+  function reportError(context, err) {
+    const msg = err && err.message ? err.message : String(err);
+    console.error(`[Market Watch] ${context}:`, err);
+    setStatus(`Error: ${msg}`, true);
   }
 
   async function api(path, options = {}) {
@@ -70,7 +77,9 @@
     if (!res.ok) {
       let msg = data.detail || data.message || `Request failed (${res.status})`;
       if (Array.isArray(msg)) msg = msg.map((e) => e.msg || JSON.stringify(e)).join("; ");
-      throw new Error(msg);
+      const err = new Error(msg);
+      console.error(`[Market Watch] API ${path} failed (${res.status}):`, msg, data);
+      throw err;
     }
     return data;
   }
@@ -272,6 +281,8 @@
       setStatus(
         `Showing cached screen (${data.count} stocks). Last data sync: ${data.last_sync || "unknown"}`
       );
+    } else if (data.hint) {
+      setStatus(data.hint);
     }
     return data;
   }
@@ -289,6 +300,8 @@
         `Screen complete — top pick: ${data.top_pick || "n/a"} (${data.count} stocks ranked). ` +
         `Data sync: ${data.last_sync || "unknown"}`
       );
+    } catch (err) {
+      reportError("Screen failed", err);
     } finally {
       setBusy(false);
     }
@@ -306,7 +319,7 @@
       pollJob(job_id);
     } catch (err) {
       setBusy(false);
-      setStatus("Error: " + err.message);
+      reportError("Data refresh failed to start", err);
     }
   }
 
@@ -319,20 +332,24 @@
         if (job.status === "completed") {
           clearInterval(pollTimer);
           pollTimer = null;
-          setBusy(false);
-          await loadPicks();
-          setStatus(job.result || "Data refresh complete.");
+          setStatus("Data refresh complete. Ranking stocks…");
+          try {
+            await runScreen();
+          } catch (err) {
+            reportError("Ranking after data refresh failed", err);
+            setBusy(false);
+          }
         } else if (job.status === "failed") {
           clearInterval(pollTimer);
           pollTimer = null;
           setBusy(false);
-          setStatus("Error: " + (job.error || "Refresh failed"));
+          reportError("Data refresh failed", new Error(job.error || "Refresh failed"));
         }
       } catch (err) {
         clearInterval(pollTimer);
         pollTimer = null;
         setBusy(false);
-        setStatus("Error: " + err.message);
+        reportError("Data refresh status check failed", err);
       }
     }, 1000);
   }
@@ -350,7 +367,7 @@
       switchTab("sector");
       setStatus(`Showing ${data.count} stocks in ${sector}.`);
     } catch (err) {
-      setStatus("Error: " + err.message);
+      reportError(`Sector load failed (${sector})`, err);
     }
   }
 
@@ -367,7 +384,7 @@
       switchTab("company");
       setStatus(`Showing details for ${ticker}.`);
     } catch (err) {
-      setStatus("Error: " + err.message);
+      reportError(`Company load failed (${ticker})`, err);
     }
   }
 
@@ -404,15 +421,27 @@
     try {
       const health = await api("/api/health");
       els.version.textContent = `${health.app} v${health.version}`;
-    } catch {
+    } catch (err) {
       els.version.textContent = "API unavailable";
-      setStatus("Cannot reach API. Is the server running?");
+      reportError("Cannot reach API", err);
       return;
     }
     try {
-      await loadPicks();
+      const picks = await loadPicks();
+      if (!picks.count) {
+        const status = await api("/api/status");
+        if (!status.universe_size) {
+          setStatus(
+            "No market data yet. Click Refresh Data to download, then Refresh to rank stocks."
+          );
+        } else if (!status.cached_picks) {
+          setStatus(
+            `Data loaded (${status.universe_size} stocks) but not ranked yet. Click Refresh to compute scores.`
+          );
+        }
+      }
     } catch (err) {
-      setStatus("Error loading picks: " + err.message);
+      reportError("Error loading picks", err);
     }
   }
 

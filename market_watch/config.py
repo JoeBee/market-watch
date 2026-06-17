@@ -12,10 +12,18 @@ DB_PATH = DATA_DIR / "market_watch.db"
 # SEC EDGAR requires a descriptive User-Agent (no generic bots).
 SEC_USER_AGENT = "MarketWatch/1.0 (personal research tool; contact@example.com)"
 
-# Default universe: S&P 100-ish for reasonable free-tier fetch times.
-# User can refresh full S&P 500 from the UI.
-DEFAULT_UNIVERSE = "sp500"
+# Default universe size for refresh (smaller = faster downloads).
+DEFAULT_UNIVERSE_LIMIT = 50
 MAX_TICKERS_FULL_SP500 = 503
+
+# Price history: ~400 calendar days covers 12-1 momentum (252 + 21 trading days).
+PRICE_HISTORY_CALENDAR_DAYS = 400
+PRICE_BATCH_SIZE = 100
+
+# Fundamentals: parallel Yahoo Finance lookups (SEC enrichment is slow and optional).
+FUNDAMENTALS_MAX_WORKERS = 10
+USE_SEC_ENRICHMENT = False
+USE_STOOQ_FALLBACK = False
 
 # Factor weights for 6–12 month composite (sum ≈ 1.0)
 WEIGHT_MOMENTUM_12_1 = 0.30

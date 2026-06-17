@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 import pandas as pd
 import yfinance as yf
 
-from market_watch.config import MIN_PRICE_HISTORY_DAYS, STOOQ_SUFFIX
+from market_watch.config import PRICE_HISTORY_CALENDAR_DAYS, STOOQ_SUFFIX, USE_STOOQ_FALLBACK
 from market_watch.data.stooq import fetch_stooq_daily
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,14 @@ def _normalize_price_df(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
     return df.dropna(subset=["close"])
 
 
+def _price_window() -> tuple[str, str]:
+    end = datetime.now(timezone.utc).date()
+    start = end - timedelta(days=PRICE_HISTORY_CALENDAR_DAYS)
+    return start.isoformat(), end.isoformat()
+
+
 def fetch_prices_yfinance(
     tickers: list[str],
-    period: str = "2y",
     progress: Callable[[str], None] | None = None,
 ) -> pd.DataFrame:
     if progress:
@@ -48,11 +54,12 @@ def fetch_prices_yfinance(
     if not tickers:
         return pd.DataFrame()
 
-    # Batch download
+    start, end = _price_window()
     yf_tickers = " ".join(tickers)
     raw = yf.download(
         yf_tickers,
-        period=period,
+        start=start,
+        end=end,
         interval="1d",
         group_by="ticker",
         auto_adjust=True,
@@ -91,16 +98,14 @@ def fetch_prices_with_fallback(
         for t in df["ticker"].unique():
             sources[str(t)] = "yfinance"
 
-    # Find tickers missing enough history
+    # Stooq fallback only when Yahoo returned no rows (optional; slow per ticker).
     need_fallback: list[str] = []
-    if df.empty:
-        need_fallback = list(tickers)
-    else:
-        counts = df.groupby("ticker").size()
-        for t in tickers:
-            tu = t.upper()
-            if counts.get(tu, 0) < MIN_PRICE_HISTORY_DAYS * 0.8:
-                need_fallback.append(t)
+    if USE_STOOQ_FALLBACK:
+        if df.empty:
+            need_fallback = list(tickers)
+        else:
+            present = set(df["ticker"].astype(str).str.upper())
+            need_fallback = [t for t in tickers if t.upper() not in present]
 
     for t in need_fallback:
         if progress:
