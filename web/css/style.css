@@ -30,6 +30,7 @@
 
 html {
   color-scheme: dark;
+  height: 100%;
 }
 
 body {
@@ -39,25 +40,143 @@ body {
   line-height: 1.5;
   color: var(--text);
   background: var(--bg);
+  height: 100%;
+  overflow: hidden;
 }
 
 .app {
+  display: flex;
+  flex-direction: column;
   max-width: 1400px;
+  height: 100vh;
+  height: 100dvh;
   margin: 0 auto;
-  padding: 1.25rem 1.5rem 2rem;
+  padding: 1.25rem 1.5rem 1rem;
+  overflow: hidden;
+}
+
+.header {
+  flex-shrink: 0;
+}
+
+.header-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  margin-bottom: 0.25rem;
 }
 
 .header h1 {
-  margin: 0 0 0.25rem;
+  margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--text);
+}
+
+.info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+}
+
+.info-btn svg {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.info-btn:hover {
+  color: var(--primary);
+  background: var(--primary-muted);
+}
+
+.info-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .version {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.info-modal {
+  border: none;
+  padding: 0;
+  max-width: min(36rem, calc(100vw - 2rem));
+  width: 100%;
+  background: transparent;
+  color: var(--text);
+}
+
+.info-modal::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.info-modal-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.info-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.info-modal-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.info-modal-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.info-modal-close:hover {
+  color: var(--text);
+  background: var(--row-hover);
+}
+
+.info-modal .guide {
+  margin: 0;
+  padding: 1rem 1.25rem 1.25rem;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .guide {
@@ -88,6 +207,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+  flex-shrink: 0;
 }
 
 .control {
@@ -160,6 +280,7 @@ body {
   margin: 0 0 0.5rem;
   min-height: 1.5rem;
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .progress {
@@ -168,6 +289,7 @@ body {
   background: var(--border);
   border-radius: 2px;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .progress.hidden {
@@ -191,6 +313,7 @@ body {
   gap: 0.25rem;
   margin-bottom: 0;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .tab {
@@ -217,20 +340,27 @@ body {
 
 .tab-panel {
   display: none;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
   padding-top: 1rem;
+  overflow: hidden;
 }
 
 .tab-panel.active {
-  display: block;
+  display: flex;
 }
 
 .panel-header {
   margin: 0 0 0.75rem;
   color: var(--text);
+  flex-shrink: 0;
 }
 
 .table-wrap {
-  overflow-x: auto;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -238,6 +368,7 @@ body {
 }
 
 .table-wrap::-webkit-scrollbar {
+  width: 8px;
   height: 8px;
 }
 
@@ -330,6 +461,9 @@ body {
 }
 
 .company-detail {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -386,14 +520,26 @@ body {
 }
 
 .disclaimer {
-  margin-top: 1.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
   color: var(--text-muted);
   font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 @media (max-width: 640px) {
   .app {
     padding: 1rem;
+  }
+
+  .info-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .info-btn svg {
+    width: 1.5rem;
+    height: 1.5rem;
   }
 
   .controls {

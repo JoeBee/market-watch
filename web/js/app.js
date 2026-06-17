@@ -30,6 +30,9 @@
     minCap: $("#min-cap"),
     btnRefreshData: $("#btn-refresh-data"),
     btnRefresh: $("#btn-refresh"),
+    btnInfo: $("#btn-info"),
+    btnInfoClose: $("#btn-info-close"),
+    infoModal: $("#info-modal"),
     status: $("#status"),
     progress: $("#progress"),
     sectorHeader: $("#sector-header"),
@@ -373,8 +376,29 @@
     else if (action === "company") showCompany(value.toUpperCase());
   }
 
+  function openInfoModal() {
+    if (els.infoModal && typeof els.infoModal.showModal === "function") {
+      els.infoModal.showModal();
+    }
+  }
+
+  function closeInfoModal() {
+    if (els.infoModal && els.infoModal.open) {
+      els.infoModal.close();
+    }
+  }
+
   els.btnRefreshData.addEventListener("click", startRefresh);
   els.btnRefresh.addEventListener("click", runScreen);
+  els.btnInfo?.addEventListener("click", openInfoModal);
+  els.btnInfoClose?.addEventListener("click", closeInfoModal);
+  els.infoModal?.addEventListener("click", (e) => {
+    if (e.target === els.infoModal) closeInfoModal();
+  });
+  els.infoModal?.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    closeInfoModal();
+  });
 
   async function init() {
     try {

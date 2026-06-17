@@ -7,6 +7,8 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -16,8 +18,10 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSpinBox,
+    QStyle,
     QTabWidget,
     QTableView,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -37,6 +41,26 @@ from market_watch.data.ingest import DataIngestor
 from market_watch.db.store import Database
 from market_watch.scoring.engine import ScoringEngine
 from market_watch.ui.workers import run_refresh_all, run_screen
+
+GUIDE_HTML = (
+    "<ul style='margin-top:4px;margin-bottom:4px;padding-left:20px'>"
+    "<li><b>What this is:</b> A ranked list of US stocks scored for a "
+    "<b>6–12 month</b> holding window—not a price target or buy/sell signal.</li>"
+    "<li><b>How ranking works:</b> Each stock gets a <b>Score</b> from momentum "
+    "(12‑month return skipping the last month, plus 6‑month return), value "
+    "(earnings & book yield), and quality (ROE, margins, lower debt).</li>"
+    "<li><b>How to read the table:</b> Rank <b>1</b> = strongest combined factor "
+    "profile in your universe; Z‑columns show how far above/below average each "
+    "stock is on that factor.</li>"
+    "<li><b>Data:</b> Prices from Yahoo/Stooq; fundamentals from Yahoo and SEC EDGAR. "
+    "Use <b>Refresh Data</b> to download updates; <b>Refresh</b> to re-rank using "
+    "data already on disk.</li>"
+    "<li><b>Sectors:</b> Click any <b>Sector</b> cell to open <i>Sector Leaders</i> "
+    "(re-ranked vs sector peers only).</li>"
+    "<li><b>Company detail:</b> Click a <b>Ticker</b> or <b>Company</b> name for key metrics "
+    "and a brief factor-based summary of strengths and risks.</li>"
+    "</ul>"
+)
 
 
 class PicksTableModel(QAbstractTableModel):
@@ -139,34 +163,21 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
 
+        title_row = QHBoxLayout()
         title = QLabel("6–12 Month Factor Screener")
         title_font = QFont(UI_FONT_FAMILY, UI_FONT_SIZE_TITLE)
         title_font.setBold(True)
         title.setFont(title_font)
-        layout.addWidget(title)
+        title_row.addWidget(title)
 
-        guide = QLabel(
-            "<ul style='margin-top:4px;margin-bottom:4px;padding-left:20px'>"
-            "<li><b>What this is:</b> A ranked list of US stocks scored for a "
-            "<b>6–12 month</b> holding window—not a price target or buy/sell signal.</li>"
-            "<li><b>How ranking works:</b> Each stock gets a <b>Score</b> from momentum "
-            "(12‑month return skipping the last month, plus 6‑month return), value "
-            "(earnings & book yield), and quality (ROE, margins, lower debt).</li>"
-            "<li><b>How to read the table:</b> Rank <b>1</b> = strongest combined factor "
-            "profile in your universe; Z‑columns show how far above/below average each "
-            "stock is on that factor.</li>"
-            "<li><b>Data:</b> Prices from Yahoo/Stooq; fundamentals from Yahoo and SEC EDGAR. "
-            "Use <b>Refresh Data</b> to download updates; <b>Refresh</b> to re-rank using "
-            "data already on disk.</li>"
-            "<li><b>Sectors:</b> Click any <b>Sector</b> cell to open <i>Sector Leaders</i> "
-            "(re-ranked vs sector peers only).</li>"
-            "<li><b>Company detail:</b> Click a <b>Ticker</b> or <b>Company</b> name for key metrics "
-            "and a brief factor-based summary of strengths and risks.</li>"
-            "</ul>"
-        )
-        guide.setWordWrap(True)
-        guide.setStyleSheet(f"font-size: {UI_FONT_SIZE_GUIDE}pt;")
-        layout.addWidget(guide)
+        info_btn = QToolButton()
+        info_btn.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxInformation))
+        info_btn.setToolTip("About Market Watch")
+        info_btn.setAutoRaise(True)
+        info_btn.clicked.connect(self._show_guide_dialog)
+        title_row.addWidget(info_btn)
+        title_row.addStretch()
+        layout.addLayout(title_row)
 
         controls = QHBoxLayout()
         self.universe_spin = QSpinBox()
@@ -288,6 +299,27 @@ class MainWindow(QMainWindow):
         layout.addWidget(disclaimer)
 
         self._load_cached_picks()
+
+    def _show_guide_dialog(self) -> None:
+        dlg = QDialog(self)
+        dlg.setWindowTitle("About Market Watch")
+        dlg.setMinimumWidth(520)
+        dlg_layout = QVBoxLayout(dlg)
+
+        guide = QLabel(GUIDE_HTML)
+        guide.setWordWrap(True)
+        guide.setTextFormat(Qt.RichText)
+        guide.setStyleSheet(f"font-size: {UI_FONT_SIZE_GUIDE}pt;")
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(guide)
+        dlg_layout.addWidget(scroll)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        buttons.accepted.connect(dlg.accept)
+        dlg_layout.addWidget(buttons)
+        dlg.exec()
 
     def _create_picks_table(self, model: PicksTableModel) -> QTableView:
         view = QTableView()

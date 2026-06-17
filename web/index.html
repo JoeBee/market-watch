@@ -13,20 +13,18 @@
 <body>
   <div class="app">
     <header class="header">
-      <h1>6–12 Month Factor Screener</h1>
+      <div class="header-title-row">
+        <h1>6–12 Month Factor Screener</h1>
+        <button type="button" class="info-btn" id="btn-info" aria-label="About Market Watch" title="About Market Watch">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 16v-4"></path>
+            <path d="M12 8h.01"></path>
+          </svg>
+        </button>
+      </div>
       <p class="version" id="app-version"></p>
     </header>
-
-    <section class="guide">
-      <ul>
-        <li><strong>What this is:</strong> A ranked list of US stocks scored for a <strong>6–12 month</strong> holding window—not a price target or buy/sell signal.</li>
-        <li><strong>How ranking works:</strong> Each stock gets a <strong>Score</strong> from momentum (12‑month return skipping the last month, plus 6‑month return), value (earnings &amp; book yield), and quality (ROE, margins, lower debt).</li>
-        <li><strong>How to read the table:</strong> Rank <strong>1</strong> = strongest combined factor profile in your universe; Z‑columns show how far above/below average each stock is on that factor.</li>
-        <li><strong>Data:</strong> Prices from Yahoo/Stooq; fundamentals from Yahoo and SEC EDGAR. Use <strong>Refresh Data</strong> to download updates; <strong>Refresh</strong> to re-rank using data already on disk.</li>
-        <li><strong>Sectors:</strong> Click any <strong>Sector</strong> cell to open <em>Sector Leaders</em> (re-ranked vs sector peers only).</li>
-        <li><strong>Company detail:</strong> Click a <strong>Ticker</strong> or <strong>Company</strong> name for key metrics and a brief factor-based summary.</li>
-      </ul>
-    </section>
 
     <section class="controls">
       <label class="control">
@@ -92,6 +90,25 @@
       Not investment advice. Rankings reflect historical factor scores only; past performance does not guarantee future results.
     </footer>
   </div>
+
+  <dialog class="info-modal" id="info-modal" aria-labelledby="info-modal-title">
+    <div class="info-modal-content">
+      <header class="info-modal-header">
+        <h2 id="info-modal-title">About Market Watch</h2>
+        <button type="button" class="info-modal-close" id="btn-info-close" aria-label="Close">&times;</button>
+      </header>
+      <div class="guide">
+        <ul>
+          <li><strong>What this is:</strong> A ranked list of US stocks scored for a <strong>6–12 month</strong> holding window—not a price target or buy/sell signal.</li>
+          <li><strong>How ranking works:</strong> Each stock gets a <strong>Score</strong> from momentum (12‑month return skipping the last month, plus 6‑month return), value (earnings &amp; book yield), and quality (ROE, margins, lower debt).</li>
+          <li><strong>How to read the table:</strong> Rank <strong>1</strong> = strongest combined factor profile in your universe; Z‑columns show how far above/below average each stock is on that factor.</li>
+          <li><strong>Data:</strong> Prices from Yahoo/Stooq; fundamentals from Yahoo and SEC EDGAR. Use <strong>Refresh Data</strong> to download updates; <strong>Refresh</strong> to re-rank using data already on disk.</li>
+          <li><strong>Sectors:</strong> Click any <strong>Sector</strong> cell to open <em>Sector Leaders</em> (re-ranked vs sector peers only).</li>
+          <li><strong>Company detail:</strong> Click a <strong>Ticker</strong> or <strong>Company</strong> name for key metrics and a brief factor-based summary.</li>
+        </ul>
+      </div>
+    </div>
+  </dialog>
 
   <script src="/static/js/app.js"></script>
 </body>
