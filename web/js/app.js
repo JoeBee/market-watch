@@ -578,14 +578,18 @@
   const PTR_MAX = 110;
   const isCoarsePointer = () => window.matchMedia("(pointer: coarse)").matches;
 
-  function activeScrollTop() {
+  function activeScrollOffset() {
     const panel = $(".tab-panel.active");
-    if (!panel) return 0;
+    if (!panel) return { top: 0, left: 0 };
     const scrollables = panel.querySelectorAll(".table-wrap, .stock-detail, .company-detail");
     for (const el of scrollables) {
-      if (el.scrollHeight > el.clientHeight) return el.scrollTop;
+      const canScrollY = el.scrollHeight > el.clientHeight;
+      const canScrollX = el.scrollWidth > el.clientWidth;
+      if (canScrollY || canScrollX) {
+        return { top: el.scrollTop, left: el.scrollLeft };
+      }
     }
-    return 0;
+    return { top: 0, left: 0 };
   }
 
   function setPtrState(state, pullHeight) {
@@ -616,8 +620,11 @@
   function initPullToRefresh() {
     if (!isCoarsePointer() || !els.ptrIndicator) return;
 
+    let startX = 0;
     let startY = 0;
-    let startScroll = 0;
+    let startScrollTop = 0;
+    let startScrollLeft = 0;
+    let ptrDisabled = false;
     let pulling = false;
     let pullDistance = 0;
 
@@ -631,8 +638,12 @@
       "touchstart",
       (e) => {
         if (busy || els.infoModal?.open || els.columnInfoModal?.open) return;
+        ptrDisabled = Boolean(e.target.closest(".table-wrap"));
+        startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;
-        startScroll = activeScrollTop();
+        const scroll = activeScrollOffset();
+        startScrollTop = scroll.top;
+        startScrollLeft = scroll.left;
         pulling = false;
         pullDistance = 0;
       },
@@ -642,14 +653,28 @@
     document.addEventListener(
       "touchmove",
       (e) => {
-        if (busy || els.infoModal?.open || els.columnInfoModal?.open || startScroll > 0) return;
-        const delta = e.touches[0].clientY - startY;
-        if (delta <= 0) {
+        if (
+          ptrDisabled ||
+          busy ||
+          els.infoModal?.open ||
+          els.columnInfoModal?.open ||
+          startScrollTop > 0 ||
+          startScrollLeft > 0
+        ) {
+          return;
+        }
+        const deltaX = e.touches[0].clientX - startX;
+        const deltaY = e.touches[0].clientY - startY;
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+          if (pulling) resetPull();
+          return;
+        }
+        if (deltaY <= 0) {
           if (pulling) resetPull();
           return;
         }
         pulling = true;
-        pullDistance = Math.min(delta * 0.45, PTR_MAX);
+        pullDistance = Math.min(deltaY * 0.45, PTR_MAX);
         setPtrState("pulling", pullDistance);
         if (pullDistance > 8) e.preventDefault();
       },
