@@ -13,7 +13,7 @@ DB_PATH = DATA_DIR / "market_watch.db"
 SEC_USER_AGENT = "MarketWatch/1.0 (personal research tool; contact@example.com)"
 
 # Default universe size for refresh (smaller = faster downloads).
-DEFAULT_UNIVERSE_LIMIT = 50
+DEFAULT_UNIVERSE_LIMIT = 20
 MAX_TICKERS_FULL_SP500 = 503
 
 # Price history: ~400 calendar days covers 12-1 momentum (252 + 21 trading days).

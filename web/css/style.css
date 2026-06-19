@@ -11,6 +11,9 @@
   --primary: #58a6ff;
   --primary-hover: #79b8ff;
   --primary-muted: rgba(88, 166, 255, 0.15);
+  --panel-stock-bg: #121820;
+  --panel-sector-bg: #121a16;
+  --panel-company-bg: #1a161c;
   --row-alt: #161b22;
   --row-hover: #2a3140;
   --link: #58a6ff;
@@ -210,6 +213,11 @@ body {
   flex-shrink: 0;
 }
 
+.controls .btn-action {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .control {
   display: flex;
   align-items: center;
@@ -342,13 +350,64 @@ body {
   border-bottom-color: var(--primary);
 }
 
+.tab[hidden] {
+  display: none;
+}
+
+.tab[data-tab="stock"] {
+  --tab-accent: var(--primary);
+}
+
+.tab[data-tab="sector"] {
+  --tab-accent: #3fb950;
+}
+
+.tab[data-tab="company"] {
+  --tab-accent: #d2a8ff;
+}
+
+.tab[data-tab="stock"]:not([hidden]),
+.tab[data-tab="sector"]:not([hidden]),
+.tab[data-tab="company"]:not([hidden]) {
+  background: color-mix(in srgb, var(--tab-accent) 7%, var(--bg-elevated));
+  color: color-mix(in srgb, var(--tab-accent) 35%, var(--text-muted));
+}
+
+.tab[data-tab="stock"]:not([hidden]):hover,
+.tab[data-tab="sector"]:not([hidden]):hover,
+.tab[data-tab="company"]:not([hidden]):hover {
+  background: color-mix(in srgb, var(--tab-accent) 12%, var(--bg-elevated));
+  color: var(--tab-accent);
+}
+
+.tab[data-tab="stock"].active,
+.tab[data-tab="sector"].active,
+.tab[data-tab="company"].active {
+  background: color-mix(in srgb, var(--tab-accent) 16%, var(--bg-elevated));
+  color: var(--tab-accent);
+  border-bottom-color: var(--tab-accent);
+}
+
 .tab-panel {
   display: none;
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding-top: 1rem;
+  padding: 1rem 0.75rem 0;
   overflow: hidden;
+  border-radius: var(--radius);
+}
+
+#panel-stock {
+  background: var(--panel-stock-bg);
+}
+
+#panel-sector {
+  background: var(--panel-sector-bg);
+}
+
+#panel-company {
+  background: var(--panel-company-bg);
 }
 
 .tab-panel.active {
@@ -414,6 +473,59 @@ body {
   white-space: nowrap;
 }
 
+.th-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  vertical-align: middle;
+}
+
+.th-label {
+  flex-shrink: 0;
+}
+
+.col-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  vertical-align: middle;
+  transition: color 0.15s, background 0.15s;
+}
+
+.col-info-btn svg {
+  width: 0.85rem;
+  height: 0.85rem;
+  pointer-events: none;
+}
+
+.col-info-btn:hover {
+  color: var(--primary);
+  background: var(--primary-muted);
+}
+
+.col-info-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.column-info-body {
+  margin: 0;
+  padding: 0 1.25rem 1.25rem;
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
 .picks-table th.sortable:hover {
   background: var(--row-hover);
 }
@@ -448,6 +560,18 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.picks-table tbody tr[data-ticker] {
+  cursor: pointer;
+}
+
+.picks-table tbody tr.selected {
+  background: var(--primary-muted);
+}
+
+.picks-table tbody tr.selected:hover {
+  background: var(--primary-muted);
+}
+
 .picks-table .clickable {
   color: var(--link);
   cursor: pointer;
@@ -462,6 +586,96 @@ body {
 .picks-table .empty-row td {
   text-align: center;
   color: var(--text-muted);
+}
+
+.stock-detail {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  box-shadow: var(--shadow);
+  color: var(--text);
+}
+
+.stock-detail-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+  color: var(--text);
+}
+
+.stock-detail-hint {
+  margin: 0 0 1.25rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.info-inline {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.link-btn {
+  display: inline;
+  margin-left: 0.35rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--link);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn:hover {
+  color: var(--primary-hover);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.75rem;
+}
+
+.metric-row {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+}
+
+.metric-label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.metric-value {
+  margin: 0.35rem 0 0;
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.metric-info-btn {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.metric-info-btn svg {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 .company-detail {
@@ -531,6 +745,55 @@ body {
   flex-shrink: 0;
 }
 
+.ptr-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  transition: height 0.2s ease;
+}
+
+.ptr-indicator.hidden {
+  visibility: hidden;
+}
+
+.ptr-indicator.ready {
+  color: var(--primary);
+}
+
+.ptr-indicator.refreshing {
+  height: 2.5rem;
+  color: var(--primary);
+}
+
+.ptr-spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.ptr-indicator.ready .ptr-spinner,
+.ptr-indicator.refreshing .ptr-spinner {
+  opacity: 1;
+}
+
+.ptr-indicator.refreshing .ptr-spinner {
+  animation: ptr-spin 0.7s linear infinite;
+}
+
+@keyframes ptr-spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (max-width: 640px) {
   .app {
     padding: 1rem;
@@ -546,12 +809,4 @@ body {
     height: 1.5rem;
   }
 
-  .controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .btn {
-    width: 100%;
-  }
 }

@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import pandas as pd
-from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
-from PySide6.QtGui import QFont
+from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt, QRect
+from PySide6.QtGui import QFont, QPainter
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -42,6 +43,86 @@ from market_watch.db.store import Database
 from market_watch.scoring.engine import ScoringEngine
 from market_watch.ui.workers import run_refresh_all, run_screen
 
+COLUMN_HINTS: dict[str, str] = {
+    "rank": "Overall rank by combined factor score (1 = highest).",
+    "ticker": "Stock trading symbol. Click for company detail.",
+    "name": "Company name. Click for company detail.",
+    "sector": "Industry sector. Click to view sector leaders.",
+    "composite": "Weighted blend of momentum, value, quality, and low-volatility factors.",
+    "ret_12_1": "12-month price return excluding the most recent month.",
+    "ret_6m": "Price return over the past six months.",
+    "momentum_12_1": "Momentum z-score from 12-1 month return vs. the universe.",
+    "value_score": "Value z-score from earnings yield and book-to-market.",
+    "quality_score": "Quality z-score from ROE, margins, and lower debt.",
+    "vol_60d": "60-day annualized price volatility (lower is preferred).",
+    "earnings_yield": "Earnings yield: earnings per dollar of share price (1 ÷ P/E).",
+    "roe": "Return on equity: net income as a percent of shareholder equity.",
+    "market_cap": "Total market value of outstanding shares.",
+}
+
+
+class ColumnInfoHeader(QHeaderView):
+    """Horizontal header with a clickable info icon per column."""
+
+    ICON_SIZE = 16
+    ICON_MARGIN = 4
+
+    def __init__(
+        self,
+        columns: list[tuple[str, str]],
+        hints: dict[str, str],
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(Qt.Horizontal, parent)
+        self._columns = columns
+        self._hints = hints
+        self.setSectionsClickable(True)
+        self.setHighlightSections(True)
+        self.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+    def paintSection(self, painter: QPainter, rect: QRect, logical_index: int) -> None:
+        super().paintSection(painter, rect, logical_index)
+        if logical_index < 0 or logical_index >= len(self._columns):
+            return
+        icon_rect = self._icon_rect_for_section(rect)
+        painter.save()
+        painter.setPen(self.palette().color(self.palette().ColorRole.ButtonText))
+        font = painter.font()
+        font.setBold(True)
+        font.setPointSize(max(7, font.pointSize() - 2))
+        painter.setFont(font)
+        painter.drawText(icon_rect, int(Qt.AlignCenter), "i")
+        painter.restore()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            idx = self.logicalIndexAt(event.pos())
+            if idx >= 0 and self._icon_rect(idx).contains(event.pos()):
+                self._show_hint(idx)
+                event.accept()
+                return
+        super().mousePressEvent(event)
+
+    def _icon_rect(self, logical_index: int) -> QRect:
+        x = self.sectionViewportPosition(logical_index)
+        w = self.sectionSize(logical_index)
+        return self._icon_rect_for_section(QRect(x, 0, w, self.height()))
+
+    def _icon_rect_for_section(self, rect: QRect) -> QRect:
+        return QRect(
+            rect.right() - self.ICON_SIZE - self.ICON_MARGIN,
+            rect.center().y() - self.ICON_SIZE // 2,
+            self.ICON_SIZE,
+            self.ICON_SIZE,
+        )
+
+    def _show_hint(self, logical_index: int) -> None:
+        key, label = self._columns[logical_index]
+        hint = self._hints.get(key)
+        if hint:
+            QMessageBox.information(self.window(), label, hint)
+
+
 GUIDE_HTML = (
     "<ul style='margin-top:4px;margin-bottom:4px;padding-left:20px'>"
     "<li><b>What this is:</b> A ranked list of US stocks scored for a "
@@ -50,21 +131,27 @@ GUIDE_HTML = (
     "(12‑month return skipping the last month, plus 6‑month return), value "
     "(earnings & book yield), and quality (ROE, margins, lower debt).</li>"
     "<li><b>How to read the table:</b> Rank <b>1</b> = strongest combined factor "
-    "profile in your universe; Z‑columns show how far above/below average each "
-    "stock is on that factor.</li>"
+    "profile. Click any row to see all metrics in a detail tab.</li>"
     "<li><b>Data:</b> Prices from Yahoo/Stooq; fundamentals from Yahoo and SEC EDGAR. "
     "Use <b>Refresh Data</b> to download updates; <b>Refresh</b> to re-rank using "
     "data already on disk.</li>"
-    "<li><b>Sectors:</b> Click any <b>Sector</b> cell to open <i>Sector Leaders</i> "
-    "(re-ranked vs sector peers only).</li>"
-    "<li><b>Company detail:</b> Click a <b>Ticker</b> or <b>Company</b> name for key metrics "
-    "and a brief factor-based summary of strengths and risks.</li>"
+    "<li><b>Tabs:</b> <i>Stock Detail</i> shows all row metrics; <i>Sector Leaders</i> "
+    "re-ranks vs sector peers; <i>Company Detail</i> adds a factor-based narrative.</li>"
+    "<li><b>Column help:</b> Click the <b>i</b> icon in a column header or detail "
+    "field for a short description.</li>"
     "</ul>"
 )
 
 
 class PicksTableModel(QAbstractTableModel):
-    COLUMNS = [
+    TABLE_COLUMNS = [
+        ("rank", "Rank"),
+        ("ticker", "Ticker"),
+        ("name", "Company"),
+        ("composite", "Score"),
+        ("ret_12_1", "12-1M %"),
+    ]
+    ALL_COLUMNS = [
         ("rank", "Rank"),
         ("ticker", "Ticker"),
         ("name", "Company"),
@@ -80,6 +167,33 @@ class PicksTableModel(QAbstractTableModel):
         ("roe", "ROE"),
         ("market_cap", "Mkt Cap"),
     ]
+    COLUMNS = TABLE_COLUMNS
+
+    @staticmethod
+    def format_value(col_key: str, val) -> str:
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return "—"
+        if col_key in ("ret_12_1", "ret_6m", "earnings_yield", "roe"):
+            return f"{float(val) * 100:.2f}%"
+        if col_key == "market_cap":
+            v = float(val)
+            if v >= 1e12:
+                return f"${v / 1e12:.2f}T"
+            if v >= 1e9:
+                return f"${v / 1e9:.2f}B"
+            return f"${v / 1e6:.0f}M"
+        if col_key in (
+            "composite",
+            "momentum_12_1",
+            "momentum_6m",
+            "value_score",
+            "quality_score",
+            "vol_60d",
+        ):
+            return f"{float(val):.3f}"
+        if col_key == "rank":
+            return str(int(val))
+        return str(val)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -117,9 +231,7 @@ class PicksTableModel(QAbstractTableModel):
             return None
         if role == Qt.TextAlignmentRole:
             col_key = self.COLUMNS[index.column()][0]
-            if col_key == "market_cap":
-                return int(Qt.AlignHCenter | Qt.AlignVCenter)
-            if col_key in ("rank", "ticker", "name", "sector"):
+            if col_key in ("rank", "ticker", "name"):
                 return int(Qt.AlignLeft | Qt.AlignVCenter)
             return int(Qt.AlignRight | Qt.AlignVCenter)
 
@@ -129,18 +241,7 @@ class PicksTableModel(QAbstractTableModel):
         val = self._df.iloc[index.row()][col_key]
         if pd.isna(val):
             return ""
-        if col_key in ("ret_12_1", "ret_6m", "earnings_yield", "roe"):
-            return f"{float(val) * 100:.2f}%"
-        if col_key == "market_cap":
-            v = float(val)
-            if v >= 1e12:
-                return f"${v / 1e12:.2f}T"
-            if v >= 1e9:
-                return f"${v / 1e9:.2f}B"
-            return f"${v / 1e6:.0f}M"
-        if col_key in ("composite", "momentum_12_1", "momentum_6m", "value_score", "quality_score", "vol_60d"):
-            return f"{float(val):.3f}"
-        return str(val)
+        return self.format_value(col_key, val)
 
 
 class MainWindow(QMainWindow):
@@ -156,8 +257,9 @@ class MainWindow(QMainWindow):
         self._current_sector: str | None = None
         self._current_ticker: str | None = None
         self._tab_all = 0
-        self._tab_sector = 1
-        self._tab_company = 2
+        self._tab_stock = 1
+        self._tab_sector = 2
+        self._tab_company = 3
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -226,9 +328,7 @@ class MainWindow(QMainWindow):
 
         self.model = PicksTableModel()
         self.table = self._create_picks_table(self.model)
-        self.table.setToolTip(
-            "Click Sector, Ticker, or Company cells to drill down"
-        )
+        self.table.setToolTip("Click any row to view full stock metrics")
         self.table.clicked.connect(
             lambda idx: self._on_picks_table_clicked(self.model, idx)
         )
@@ -239,26 +339,54 @@ class MainWindow(QMainWindow):
         all_layout.addWidget(self.table)
         self.tabs.addTab(all_tab, "All Stocks")
 
+        self.stock_detail_title = QLabel("Click a row in All Stocks to view full metrics.")
+        self.stock_detail_title.setWordWrap(True)
+        title_font = QFont(UI_FONT_FAMILY, UI_FONT_SIZE_TITLE)
+        title_font.setBold(True)
+        self.stock_detail_title.setFont(title_font)
+
+        self.stock_detail_metrics = QWidget()
+        self.stock_detail_metrics_layout = QGridLayout(self.stock_detail_metrics)
+        self.stock_detail_metrics_layout.setContentsMargins(0, 0, 0, 0)
+        self.stock_detail_metrics_layout.setHorizontalSpacing(8)
+        self.stock_detail_metrics_layout.setVerticalSpacing(10)
+
+        stock_inner = QWidget()
+        stock_inner_layout = QVBoxLayout(stock_inner)
+        stock_inner_layout.addWidget(self.stock_detail_title)
+        stock_inner_layout.addWidget(self.stock_detail_metrics)
+        stock_inner_layout.addStretch()
+
+        stock_scroll = QScrollArea()
+        stock_scroll.setWidgetResizable(True)
+        stock_scroll.setWidget(stock_inner)
+
+        stock_tab = QWidget()
+        stock_tab.setStyleSheet("background-color: #121820;")
+        stock_layout = QVBoxLayout(stock_tab)
+        stock_layout.setContentsMargins(0, 0, 0, 0)
+        stock_layout.addWidget(stock_scroll)
+        self.tabs.addTab(stock_tab, "Stock Detail")
+
         self.sector_model = PicksTableModel()
         self.sector_table = self._create_picks_table(self.sector_model)
-        self.sector_table.setToolTip(
-            "Click Sector, Ticker, or Company cells to drill down"
-        )
+        self.sector_table.setToolTip("Click any row to view full stock metrics")
         self.sector_table.clicked.connect(
             lambda idx: self._on_picks_table_clicked(self.sector_model, idx)
         )
         self.sector_header = QLabel(
-            "Click a Sector in All Stocks to see leading names in that sector."
+            "Sector leaders appear here when you select a stock."
         )
         self.sector_header.setWordWrap(True)
         sector_tab = QWidget()
+        sector_tab.setStyleSheet("background-color: #121a16;")
         sector_layout = QVBoxLayout(sector_tab)
         sector_layout.setContentsMargins(0, 0, 0, 0)
         sector_layout.addWidget(self.sector_header)
         sector_layout.addWidget(self.sector_table)
         self.tabs.addTab(sector_tab, "Sector Leaders")
 
-        self.company_title = QLabel("Click a Ticker or Company in any table to view details.")
+        self.company_title = QLabel("Factor-based company summary appears when you select a stock.")
         self.company_title.setWordWrap(True)
         self.company_metrics = QLabel()
         self.company_metrics.setWordWrap(True)
@@ -281,10 +409,22 @@ class MainWindow(QMainWindow):
         company_scroll.setWidget(company_inner)
 
         company_tab = QWidget()
+        company_tab.setStyleSheet("background-color: #1a161c;")
         company_layout = QVBoxLayout(company_tab)
         company_layout.setContentsMargins(0, 0, 0, 0)
         company_layout.addWidget(company_scroll)
         self.tabs.addTab(company_tab, "Company Detail")
+
+        self.tabs.setStyleSheet(
+            "QTabBar::tab { padding: 8px 14px; margin-right: 2px; background: #21262d; }"
+            "QTabBar::tab:selected { font-weight: 600; }"
+            "QTabBar::tab:nth-child(2) { background-color: #1a2030; color: #8b949e; }"
+            "QTabBar::tab:nth-child(2):selected { background-color: #1e2840; color: #58a6ff; }"
+            "QTabBar::tab:nth-child(3) { background-color: #1a2820; color: #8b949e; }"
+            "QTabBar::tab:nth-child(3):selected { background-color: #1e3224; color: #3fb950; }"
+            "QTabBar::tab:nth-child(4) { background-color: #221a28; color: #8b949e; }"
+            "QTabBar::tab:nth-child(4):selected { background-color: #2a2034; color: #d2a8ff; }"
+        )
 
         layout.addWidget(self.tabs)
 
@@ -326,7 +466,8 @@ class MainWindow(QMainWindow):
         view.setModel(model)
         view.setSelectionBehavior(QAbstractItemView.SelectRows)
         view.setAlternatingRowColors(True)
-        header = view.horizontalHeader()
+        header = ColumnInfoHeader(PicksTableModel.COLUMNS, COLUMN_HINTS, view)
+        view.setHorizontalHeader(header)
         header.setSectionResizeMode(QHeaderView.ResizeToContents)
         header.setStretchLastSection(False)
         table_font = QFont(UI_FONT_FAMILY, UI_TABLE_FONT_SIZE)
@@ -400,30 +541,73 @@ class MainWindow(QMainWindow):
             if self._current_sector:
                 self._show_sector(self._current_sector)
             if self._current_ticker:
-                self._show_company(self._current_ticker)
+                row = self.model._df[
+                    self.model._df["ticker"].astype(str).str.upper() == self._current_ticker
+                ]
+                if not row.empty:
+                    self._show_stock_detail(row.iloc[0])
+                else:
+                    self._show_company(self._current_ticker)
         elif isinstance(result, str):
             self.status_label.setText(result)
             self._load_cached_picks()
 
-    def _on_picks_table_clicked(self, model: PicksTableModel, index: QModelIndex) -> None:
-        if model._df.empty:
+    def _clear_stock_detail_metrics(self) -> None:
+        while self.stock_detail_metrics_layout.count():
+            item = self.stock_detail_metrics_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+    def _show_stock_detail(self, row: pd.Series) -> None:
+        ticker = row.get("ticker")
+        if ticker is None or (isinstance(ticker, float) and pd.isna(ticker)):
             return
-        col_key = PicksTableModel.COLUMNS[index.column()][0]
-        row = model._df.iloc[index.row()]
-        if col_key == "sector":
-            sector = row.get("sector")
-            if sector is None or (isinstance(sector, float) and pd.isna(sector)):
-                return
+        ticker_str = str(ticker).strip().upper()
+        if not ticker_str:
+            return
+
+        self._current_ticker = ticker_str
+        name = row.get("name")
+        title = f"{name} ({ticker_str})" if name and not pd.isna(name) else ticker_str
+        self.stock_detail_title.setText(title)
+        self.tabs.setTabText(self._tab_stock, ticker_str)
+
+        self._clear_stock_detail_metrics()
+        for row_idx, (col_key, label) in enumerate(PicksTableModel.ALL_COLUMNS):
+            label_widget = QLabel(label)
+            label_font = QFont(UI_FONT_FAMILY, UI_FONT_SIZE)
+            label_font.setBold(True)
+            label_widget.setFont(label_font)
+
+            info_btn = QToolButton()
+            info_btn.setIcon(self.style().standardIcon(QStyle.SP_MessageBoxInformation))
+            info_btn.setAutoRaise(True)
+            hint = COLUMN_HINTS.get(col_key, "")
+            info_btn.setToolTip("About this field")
+            info_btn.clicked.connect(
+                lambda _checked=False, field_label=label, field_hint=hint: QMessageBox.information(
+                    self, field_label, field_hint
+                )
+            )
+
+            val = row.get(col_key) if col_key in row.index else None
+            value_widget = QLabel(PicksTableModel.format_value(col_key, val))
+            value_widget.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
+            self.stock_detail_metrics_layout.addWidget(label_widget, row_idx, 0)
+            self.stock_detail_metrics_layout.addWidget(info_btn, row_idx, 1)
+            self.stock_detail_metrics_layout.addWidget(value_widget, row_idx, 2)
+
+        self.tabs.setCurrentIndex(self._tab_stock)
+        self.status_label.setText(f"Showing full metrics for {ticker_str}.")
+
+        sector = row.get("sector")
+        if sector is not None and not (isinstance(sector, float) and pd.isna(sector)):
             sector_str = str(sector).strip()
             if sector_str:
                 self._show_sector(sector_str)
-        elif col_key in ("ticker", "name"):
-            ticker = row.get("ticker")
-            if ticker is None or (isinstance(ticker, float) and pd.isna(ticker)):
-                return
-            ticker_str = str(ticker).strip().upper()
-            if ticker_str:
-                self._show_company(ticker_str)
+        self._show_company(ticker_str)
 
     def _show_company(self, ticker: str) -> None:
         self._current_ticker = ticker
@@ -446,7 +630,6 @@ class MainWindow(QMainWindow):
         self.company_summary.setText(
             f"<p style='font-size:{UI_FONT_SIZE_GUIDE}pt'>{detail['summary_html']}</p>"
         )
-        self.tabs.setCurrentIndex(self._tab_company)
 
     def _show_sector(self, sector: str) -> None:
         self._current_sector = sector
@@ -462,4 +645,9 @@ class MainWindow(QMainWindow):
             f"(same 6–12 month factors, z-scores vs sector peers only). "
             f"Sector #1: <b>{top}</b>"
         )
-        self.tabs.setCurrentIndex(self._tab_sector)
+
+    def _on_picks_table_clicked(self, model: PicksTableModel, index: QModelIndex) -> None:
+        if model._df.empty:
+            return
+        row = model._df.iloc[index.row()]
+        self._show_stock_detail(row)

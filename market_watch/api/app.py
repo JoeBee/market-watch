@@ -107,7 +107,7 @@ def get_picks() -> dict[str, Any]:
     hint = None
     if count == 0:
         if universe_size == 0:
-            hint = "No market data yet. Click Refresh Data to download, then Refresh to rank stocks."
+            hint = "No market data yet. Click Fetch Data to download and rank stocks."
         else:
             hint = (
                 f"Data loaded ({universe_size} stocks) but not ranked yet. "
